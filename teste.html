@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>meetStrangers</title>
+</head>
+<body>
+  <h2>Meet Strangers - Vídeo</h2>
+  <video id="localVideo" autoplay muted playsinline></video>
+  <video id="remoteVideo" autoplay playsinline></video>
+
+  <script>
+    const ws = new WebSocket('ws://localhost:3001')
+    const localVideo = document.getElementById('localVideo')
+    const remoteVideo = document.getElementById('remoteVideo')
+
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    })
+
+    // Envia candidatos ICE
+    pc.onicecandidate = event => {
+      if (event.candidate) {
+        ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }))
+      }
+    }
+
+    // Mostra vídeo remoto
+    pc.ontrack = event => {
+      remoteVideo.srcObject = event.streams[0]
+    }
+
+    // Captura câmera/mic
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      .then(stream => {
+        localVideo.srcObject = stream
+        stream.getTracks().forEach(track => pc.addTrack(track, stream))
+      })
+
+    ws.onopen = () => {
+      const name = prompt('Seu nome:')
+      const area = prompt('Área de interesse:')
+      ws.send(JSON.stringify({ type: 'meta', name, area }))
+    }
+
+    ws.onmessage = async (event) => {
+      const data = JSON.parse(event.data)
+
+      if (data.type === 'match') {
+        console.log('🎯 Match encontrado:', data.partner)
+        const offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
+        ws.send(JSON.stringify({ type: 'offer', offer }))
+      }
+
+      if (data.type === 'offer') {
+        await pc.setRemoteDescription(new RTCSessionDescription(data.offer))
+        const answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+        ws.send(JSON.stringify({ type: 'answer', answer }))
+      }
+
+      if (data.type === 'answer') {
+        await pc.setRemoteDescription(new RTCSessionDescription(data.answer))
+      }
+
+      if (data.type === 'candidate') {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(data.candidate))
+        } catch (e) {
+          console.error('Erro ao adicionar ICE:', e)
+        }
+      }
+    }
+  </script>
+</body>
+</html>
