@@ -3,7 +3,6 @@ import express from 'express';
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import { handleJoin, handleMessage, matchmakingQueue } from './matchmaker.js';
-import { handleSignaling } from './signaling.js';
 
 const app = express();
 const server = http.createServer(app); // HTTP server compatível com Render
@@ -29,9 +28,6 @@ wss.on('connection', (ws) => {
         case 'message':
           handleMessage(ws, parsed);
           break;
-        case 'signal':
-          handleSignaling(ws, parsed);
-          break;
         default:
           console.log('❓ Tipo de mensagem desconhecido:', parsed);
       }
@@ -49,6 +45,8 @@ wss.on('connection', (ws) => {
       ws.partner.partner = null;
     }
   });
+
+  
 });
 
 // Usa a porta do ambiente (Render usa process.env.PORT)

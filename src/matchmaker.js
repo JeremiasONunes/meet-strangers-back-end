@@ -20,7 +20,14 @@ function handleJoin(ws, data) {
     console.log(`⏳ ${ws.meta.name} aguardando na fila`)
   }
 }
+function handleDisconnect(ws) {
+  matchmakingQueue.delete(ws);
 
+  if (ws.partner) {
+    ws.partner.send(JSON.stringify({ type: "partner-disconnected" }));
+    ws.partner.partner = null;
+  }
+}
 function handleMessage(ws, data) {
   if (ws.partner && ws.partner.readyState === ws.OPEN) {
     ws.partner.send(JSON.stringify({
