@@ -10,7 +10,7 @@ const app = express();
 // Configuração de CORS
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://meet-strangers-front-end.onrender.com'] 
+    ? ['https://meet-strangers-front-end.onrender.com', /\.vercel\.app$/] 
     : ['http://localhost:5173', 'http://127.0.0.1:5173'],
   credentials: true
 }));
@@ -23,6 +23,11 @@ const wss = new WebSocketServer({
     const allowedOrigins = process.env.NODE_ENV === 'production'
       ? ['https://meet-strangers-front-end.onrender.com']
       : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+    
+    // Aceita qualquer domínio .vercel.app
+    if (origin && origin.includes('.vercel.app')) {
+      return true;
+    }
     return !origin || allowedOrigins.includes(origin);
   }
 });
