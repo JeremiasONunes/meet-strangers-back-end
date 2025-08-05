@@ -1,16 +1,44 @@
-// server.js
 import express from 'express';
 import http from 'http';
+import cors from 'cors';
 import { WebSocketServer } from 'ws';
-import { handleJoin, handleMessage, matchmakingQueue } from './matchmaker.js';
+import { handleJoin, handleMessage, handleDisconnect, getQueueSize } from './matchmaker.js';
+import { sanitizeForLog } from './utils.js';
 
 const app = express();
-const server = http.createServer(app); // HTTP server compatível com Render
-const wss = new WebSocketServer({ server }); // WebSocket usando o mesmo server
 
-// Middleware opcional para verificação de vida
+// Configuração de CORS
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://meet-strangers-front-end.onrender.com'] 
+    : ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  credentials: true
+}));
+
+const server = http.createServer(app);
+const wss = new WebSocketServer({ 
+  server,
+  verifyClient: (info) => {
+    const origin = info.origin;
+    const allowedOrigins = process.env.NODE_ENV === 'production'
+      ? ['https://meet-strangers-front-end.onrender.com']
+      : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+    return !origin || allowedOrigins.includes(origin);
+  }
+});
+
+// Middleware para verificação de vida
 app.get('/', (req, res) => {
-  res.send('🚀 Servidor WebSocket com suporte WSS está rodando!');
+  res.json({ 
+    status: 'ok', 
+    message: 'MeetStranger Backend rodando',
+    queueSize: getQueueSize(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'healthy', uptime: process.uptime() });
 });
 
 // Evento de nova conexão WebSocket
@@ -28,8 +56,9 @@ wss.on('connection', (ws) => {
         case 'message':
           handleMessage(ws, parsed);
           break;
+
         default:
-          console.log('❓ Tipo de mensagem desconhecido:', parsed);
+          console.log('❓ Tipo de mensagem desconhecido:', sanitizeForLog(parsed.type || 'undefined'));
       }
     } catch (err) {
       console.error('❌ Erro ao processar mensagem:', err);
@@ -37,13 +66,13 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    console.log('🔌 Cliente desconectado');
-    matchmakingQueue.delete(ws);
+    console.log('🔌 Cliente desconectado:', sanitizeForLog(ws.meta?.name || 'Anônimo'));
+    handleDisconnect(ws);
+  });
 
-    if (ws.partner) {
-      ws.partner.send(JSON.stringify({ type: 'partner-disconnected' }));
-      ws.partner.partner = null;
-    }
+  ws.on('error', (error) => {
+    console.error('❌ Erro WebSocket:', error);
+    handleDisconnect(ws);
   });
 
   
